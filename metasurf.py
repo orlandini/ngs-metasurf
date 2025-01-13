@@ -6,6 +6,8 @@ import netgen.gui
 from cross import create_cross_mesh
 from mat_indices import ag_n, ag_k, al_n, al_k, glass_n, glass_k
 
+
+from boundaryAndDomainCheck import drawBndAll,drawBnd
 ngsglobals.msg_level = 1
 
 
@@ -50,22 +52,24 @@ for name in vollist.keys():
     surflist[name+"_y_max"] = count
     count+=1
 
-print(surflist)
-# checking surface domains
+# # checking surface domains
 
-surf = mesh.BoundaryCF(surflist, -1)
-gu = GridFunction(H1(mesh), name='surfs')
-gu.Set(surf, definedon=~mesh.Boundaries(''))
-Draw(gu)
-print("Checking 2D domains... press Enter to continue")
-input()
+# # drawBndAll(mesh)
 
-#checking volume domains
+# drawBnd(mesh,".*x_min",block=True)
+# surf = mesh.BoundaryCF(surflist, -1)
+# gu = GridFunction(H1(mesh), name='surfs')
+# gu.Set(surf, definedon=~mesh.Boundaries(''))
+# Draw(gu)
+# print("Checking 2D domains... press Enter to continue")
+# input()
 
-vol = CoefficientFunction([vollist.get(m,0) for m in mesh.GetMaterials()])
-Draw(vol,mesh,"vols",draw_surf=False)
-print("Checking 3D domains... press Enter to continue")
-input()
+# #checking volume domains
+# cf = mesh.MaterialCF(vollist)
+# print(mesh.GetMaterials())
+# Draw(cf, mesh, "vols");
+# print("Checking 3D domains... press Enter to continue")
+# input()
 
 
 wl_list = np.arange(1,1.1,0.005)
@@ -110,22 +114,25 @@ for wl in wl_list:
 
     #our system is excited at the subdomain air port by a plane wave in the x direction
     #which is a constant vector field propagating with the propagation constant k0
-    e_in = CoefficientFunction((0, 1))
-    print(e_in)
-    f += (2j*kzero * e_in * v.Trace()).ds("air_port")
+    e_in = CoefficientFunction((0, 1, 0))
+    # print(e_in)
+    f += (2j*kzero * e_in * v.Trace()) * ds("air_port")
     print("assembling system with ndofs {}".format(sum(fes.FreeDofs())))
 
     with TaskManager():
         a.Assemble()
         f.Assemble()
 
+    print("done!")
     # the solution field 
     gfu = GridFunction(fes)
+    print("solving...")
     gfu.vec.data = a.mat.Inverse(fes.FreeDofs()) * f.vec
+    print("done!")
     
-
 
     # plot the solution (netgen-gui only)
     Draw (gfu)
 
+    print("press enter..")
     input()
