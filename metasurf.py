@@ -75,7 +75,7 @@ for name in vollist.keys():
 wl_list = np.arange(1,1.1,0.005)
 porder = 3
 
-for wl in wl_list:
+for wl in wl_list:    
     ag_coeff = (ag_n(wl)-ag_k(wl)*1j)**2
     #for now, silver instead of glass
     sub_coeff = (ag_n(wl)-ag_k(wl)*1j)**2
@@ -91,9 +91,9 @@ for wl in wl_list:
         'pml_sub' : (ag_n(wl)-ag_k(wl)*1j)**2,
         }
 
-    er = CoefficientFunction([erlist.get(m, 0) for m in mesh.GetMaterials()])
+    er = er = mesh.MaterialCF(erlist, 0)
     #non-magnetic materials only
-    ur = CoefficientFunction(1)
+    ur = CF(1)
 
     #now we define the PML regions
     alphapml = 2.0j/h_pml
@@ -107,28 +107,32 @@ for wl in wl_list:
     u, v = fes.TnT()
 
     kzero = 2*pi/wl
-    a = BilinearForm(fes,hermitian=False)
+    print(kzero)
+    a = BilinearForm(fes,condense=True,hermitian=False)
     a += ((1./ur) * curl(u) * curl(v) - kzero**2 * er * u * v)*dx
 
     f = LinearForm(fes)
 
     #our system is excited at the subdomain air port by a plane wave in the x direction
     #which is a constant vector field propagating with the propagation constant k0
-    e_in = CoefficientFunction((0, 1, 0))
+    e_in = CF((0, 1, 0))
     # print(e_in)
     f += (2j*kzero * e_in * v.Trace()) * ds("air_port")
     print("assembling system with ndofs {}".format(sum(fes.FreeDofs())))
-
     with TaskManager():
         a.Assemble()
         f.Assemble()
 
     print("done!")
+    print("norm rhs {}".format(Norm(f.vec)))
     # the solution field 
     gfu = GridFunction(fes)
     print("solving...")
     gfu.vec.data = a.mat.Inverse(fes.FreeDofs()) * f.vec
-    print("done!")
+
+    ref = Integrate(InnerProduct(gfu - e_in, gfu - e_in)/(InnerProduct(e_in, e_in)+1e-12),
+                    mesh,BND, definedon=mesh.Boundaries("air_port"))
+    print("ref {} !".format(ref))
     
 
     # plot the solution (netgen-gui only)
