@@ -18,13 +18,15 @@ def create_cross_mesh(w_domain, h_domain, w_cross, l_cross, d_cross,
     ag_full = Box(Pnt(-w_domain/2,-w_domain/2,h_sub), Pnt(w_domain/2,w_domain/2,h_silver+h_sub))
     cross_1 = Box(Pnt(-w_cross/2,-l_cross/2,h_cross), Pnt(w_cross/2,l_cross/2,h_silver+h_sub))
     cross_2 = Box(Pnt(-l_cross/2,-w_cross/2,h_cross), Pnt(l_cross/2,w_cross/2,h_silver+h_sub))
+
+    #pml regions
+    pml_air = Box(Pnt(-w_domain/2,-w_domain/2,h_domain), Pnt(w_domain/2,w_domain/2,h_domain+h_pml))
+    pml_sub = Box(Pnt(-w_domain/2,-w_domain/2,-h_pml), Pnt(w_domain/2,w_domain/2,0))
+
+    #boolean operations
     cross = cross_1 + cross_2
     ag = ag_full - cross
     air = box - sub - ag
-
-    #pml regions
-    pml_air = box = Box(Pnt(-w_domain/2,-w_domain/2,h_domain), Pnt(w_domain/2,w_domain/2,h_domain+h_pml))
-    pml_sub = box = Box(Pnt(-w_domain/2,-w_domain/2,-h_pml), Pnt(w_domain/2,w_domain/2,0))
 
     #now for element sizes
     air.mat("air").maxh = el_air
@@ -50,11 +52,14 @@ def create_cross_mesh(w_domain, h_domain, w_cross, l_cross, d_cross,
 
     #setting the ports
     sub.faces.Min(Z).name = 'sub_port'
+    #this does not work
     air.faces.Max(Z).name = 'air_port'
+    #but this does
+    pml_air.faces.Min(Z).name = 'air_port'
 
 
+    
     #setting dirichlet BCs at PMLs
-    #setting the ports
     pml_air.faces.Max(Z).name = 'dirichlet'
     pml_sub.faces.Min(Z).name = 'dirichlet'
     
