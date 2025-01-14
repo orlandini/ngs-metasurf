@@ -1,11 +1,14 @@
 import numpy as np
+from timeit import default_timer as timer
+import matplotlib.pyplot as plt
+
 
 from ngsolve import *
-import netgen.gui
+from ngsolve.webgui import Draw
+from ngsolve.krylovspace import GMRes
 
 from cross import create_cross_mesh
 from mat_indices import ag_n, ag_k, al_n, al_k, glass_n, glass_k
-
 
 from boundaryAndDomainCheck import drawBndAll,drawBnd
 ngsglobals.msg_level = 1
@@ -56,7 +59,9 @@ for name in vollist.keys():
 
 # # drawBndAll(mesh)
 
-# drawBnd(mesh,".*x_min",block=True)
+
+
+# drawBnd(mesh,"sub_port|air_port",block=True)
 # surf = mesh.BoundaryCF(surflist, -1)
 # gu = GridFunction(H1(mesh), name='surfs')
 # gu.Set(surf, definedon=~mesh.Boundaries(''))
@@ -75,6 +80,8 @@ for name in vollist.keys():
 wl_list = np.arange(1,1.1,0.005)
 porder = 3
 
+
+ref_list = []
 for wl in wl_list:    
     ag_coeff = (ag_n(wl)-ag_k(wl)*1j)**2
     #for now, silver instead of glass
@@ -85,10 +92,9 @@ for wl in wl_list:
     erlist = {
         'pml_air' : 1,
         'air' : 1,
-        'ag' : (ag_n(wl)-ag_k(wl)*1j)**2,
-        #for now, substrate is silver
-        'sub' : (ag_n(wl)-ag_k(wl)*1j)**2,
-        'pml_sub' : (ag_n(wl)-ag_k(wl)*1j)**2,
+        'ag' : ag_coeff,
+        'sub' : sub_coeff,
+        'pml_sub' : sub_coeff,
         }
 
     er = er = mesh.MaterialCF(erlist, 0)
@@ -107,7 +113,6 @@ for wl in wl_list:
     u, v = fes.TnT()
 
     kzero = 2*pi/wl
-    print(kzero)
     a = BilinearForm(fes,condense=True,hermitian=False)
     a += ((1./ur) * curl(u) * curl(v) - kzero**2 * er * u * v)*dx
 
@@ -115,9 +120,10 @@ for wl in wl_list:
 
     #our system is excited at the subdomain air port by a plane wave in the x direction
     #which is a constant vector field propagating with the propagation constant k0
-    e_in = CF((0, 1, 0))
+    e_in = mesh.BoundaryCF({"air_port":(0, 1, 0)})
+    e_in = CF((0,1,0))
     # print(e_in)
-    f += (2j*kzero * e_in * v.Trace()) * ds("air_port")
+    f += 2j*kzero * e_in * v.Trace() * ds("air_port")
     print("assembling system with ndofs {}".format(sum(fes.FreeDofs())))
     with TaskManager():
         a.Assemble()
@@ -128,15 +134,29 @@ for wl in wl_list:
     # the solution field 
     gfu = GridFunction(fes)
     print("solving...")
-    gfu.vec.data = a.mat.Inverse(fes.FreeDofs()) * f.vec
+    gfu.vec.data = a.mat.Inverse(fes.FreeDofs(),inverse='umfpack') * f.vec
 
     ref = Integrate(InnerProduct(gfu - e_in, gfu - e_in)/(InnerProduct(e_in, e_in)+1e-12),
                     mesh,BND, definedon=mesh.Boundaries("air_port"))
-    print("ref {} !".format(ref))
-    
+    ref_list.append(ref)
+    print("ref {} !".format(abs(ref)))
 
-    # plot the solution (netgen-gui only)
-    Draw (gfu)
 
-    print("press enter..")
-    input()
+
+def plot_data(wl, val, title):
+    x = list(wl)
+    y = list(np.abs(val))
+    ax = plt.gca()
+    ax.set_xlim([min(wl), max(wl)])
+    print("min val: {} max val {}".format(min(y),max(y)))
+    ax.set_ylim([0, 1])
+
+    # plotting newer graph
+    plt.xlabel(r"$\lambda_0 \mathrm{(\mu m)}$")
+    plt.ylabel(title)
+    plt.plot(x, y, color='#1f77b4', linewidth=3)
+
+nval = len(ref_list)
+#maybe we have aborted the execution
+wl_plot = wl_list[:nval]
+plot_data(wl_plot,ref_list,"Reflection")
